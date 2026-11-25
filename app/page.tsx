@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import JSZip from "jszip";
 
 type Report = { platform: string; project: string; minecraft: string; java: string; build: string; evidence: string[]; warnings: string[]; files: string[] };
 type BuildResult = { ok: boolean; artifactPathname?: string; artifactName?: string; artifactBytes?: number; message?: string; logs?: string };
+type BuildHistoryItem = { id: string; fileName: string; createdAt: number; ok: boolean; message: string; logs: string; artifactPathname?: string; artifactName?: string; artifactBytes?: number };
 
 const textFile = async (zip: JSZip, path: string) => {
   const file = zip.file(path);
@@ -95,6 +96,32 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [buildResult, setBuildResult] = useState<BuildResult | null>(null);
   const [buildStatus, setBuildStatus] = useState("");
+  const [buildHistory, setBuildHistory] = useState<BuildHistoryItem[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
+  const [reviewBuildId, setReviewBuildId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("minecraft-cloud-compiler-history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setBuildHistory(parsed.filter((item): item is BuildHistoryItem => item && typeof item.id === "string" && typeof item.fileName === "string" && typeof item.createdAt === "number" && typeof item.ok === "boolean").slice(0, 10));
+      }
+    } catch { /* Ignore invalid or unavailable browser storage. */ }
+    setHistoryReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!historyReady) return;
+    try { window.localStorage.setItem("minecraft-cloud-compiler-history", JSON.stringify(buildHistory)); }
+    catch { /* A full browser storage quota must not interrupt a build. */ }
+  }, [buildHistory, historyReady]);
+
+  function rememberBuild(item: Omit<BuildHistoryItem, "id" | "createdAt">) {
+    const entry: BuildHistoryItem = { ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, createdAt: Date.now(), logs: (item.logs || "").slice(-18_000) };
+    setBuildHistory(current => [entry, ...current].slice(0, 10));
+    setReviewBuildId(entry.id);
+  }
 
   const canBuild = useMemo(() => {
     if (!report) return false;
@@ -135,10 +162,25 @@ export default function Home() {
       });
       const result = await response.json() as BuildResult;
       setBuildResult(result);
-      if (!response.ok || !result.ok) setError(result.message || "Build failed. Review the build log below.");
+      const succeeded = response.ok && result.ok;
+      const message = result.message || (succeeded ? "Build completed." : "Build failed. Review the error log.");
+      if (!succeeded) setError(message);
       else setBuildStatus("Build completed. Your artifact is ready.");
+      rememberBuild({
+        fileName: selectedFile.name,
+        ok: succeeded,
+        message,
+        logs: result.logs || "",
+        artifactPathname: result.artifactPathname,
+        artifactName: result.artifactName,
+        artifactBytes: result.artifactBytes,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Cloud build could not be started.");
+      const message = e instanceof Error ? e.message : "Cloud build could not be started.";
+      const failedResult: BuildResult = { ok: false, message, logs: "The upload or build request failed before the worker returned its build log.\\n" + message };
+      setError(message);
+      setBuildResult(failedResult);
+      rememberBuild({ fileName: selectedFile.name, ok: false, message, logs: failedResult.logs || "" });
     } finally {
       setCompiling(false);
     }
@@ -166,6 +208,24 @@ export default function Home() {
       {buildResult?.logs && <details className="logs" open={!buildResult.ok}><summary>Build log</summary><pre>{buildResult.logs}</pre></details>}
       <p className="note">Java builds run in disposable Firecracker workers with no project secrets. Tests are skipped. Builds have a 4-minute worker limit and finite free-tier quotas.</p>
       </div>}
+    </section>
+    <section className="history">
+      <div className="history-head"><div><h2>Build History</h2><p className="muted">Your last 10 build reports are saved in this browser so you can review failures later.</p></div>
+        {buildHistory.length > 0 && <button className="history-clear" onClick={() => { setBuildHistory([]); setReviewBuildId(null); }}>Clear history</button>}
+      </div>
+      {!historyReady && <p className="history-empty">Loading saved reports…</p>}
+      {historyReady && buildHistory.length === 0 && <p className="history-empty">No builds yet. Your success and error reports will appear here.</p>}
+      <div className="history-list">{buildHistory.map(item => <article className={`history-item ${item.ok ? "history-success" : "history-failed"}`} key={item.id}>
+        <div className="history-item-top"><div className="history-item-copy">
+          <div className="history-title"><span className={`history-status ${item.ok ? "status-success" : "status-failed"}`}>{item.ok ? "SUCCESS" : "FAILED"}</span><strong>{item.fileName}</strong></div>
+          <small>{new Date(item.createdAt).toLocaleString()} · {item.message}</small>
+        </div><button className="history-review-button" onClick={() => setReviewBuildId(reviewBuildId === item.id ? null : item.id)}>{reviewBuildId === item.id ? "Close review" : "Review"}</button></div>
+        {reviewBuildId === item.id && <div className="history-review">
+          <p className={item.ok ? "history-review-success" : "history-review-error"}>{item.ok ? "Build completed successfully." : "Build failed. Check the details below."} {item.message}</p>
+          {item.logs ? <pre>{item.logs}</pre> : <p className="muted">No worker log was returned for this attempt.</p>}
+          {item.ok && item.artifactPathname && <a className="history-download" href={`/api/download?pathname=${encodeURIComponent(item.artifactPathname)}`}>Download {item.artifactName || "artifact"}</a>}
+        </div>}
+      </article>)}</div>
     </section>
     <section className="features"><div className="feature"><b>01 / Detect</b><p>Identify Java and Bedrock project markers with visible evidence.</p></div><div className="feature"><b>02 / Validate</b><p>Reject unsafe archive paths and flag conflicting project structures.</p></div><div className="feature"><b>03 / Build safely</b><p>Build Java projects in isolated workers or package Bedrock add-ons natively.</p></div></section>
     <footer>Built for the Minecraft community · Free by design · Monthly compute and storage limits apply</footer>
