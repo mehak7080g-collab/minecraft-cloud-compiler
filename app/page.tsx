@@ -93,7 +93,7 @@ export default function Home() {
   async function onFile(file?: File) {
     if (!file) return;
     setError(""); setReport(null); setFileName(file.name); setBusy(true);
-    if (!file.toLowerCase?.endsWith?.(".zip") && !file.name.toLowerCase().endsWith(".zip")) {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
       setError("Please upload a .zip archive of your project folder."); setBusy(false); return;
     }
     if (file.size > 50 * 1024 * 1024) {
