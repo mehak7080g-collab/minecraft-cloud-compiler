@@ -42,7 +42,98 @@ const BEDROCK_SCRIPT = "import json, shutil, sys, zipfile\nfrom pathlib import P
 const JAR_SCRIPT = "import json, shutil, sys\nfrom pathlib import Path\n\nroot = Path(sys.argv[1]).resolve()\nbase = Path(\"/vercel/sandbox/work\").resolve()\nif root != base and base not in root.parents:\n    raise SystemExit(\"Invalid project root.\")\nitems = []\nfor path in root.rglob(\"*.jar\"):\n    if not path.is_file() or path.is_symlink():\n        continue\n    parts = [p.lower() for p in path.parts]\n    name = path.name.lower()\n    if any(x in parts for x in (\".gradle\", \".git\")):\n        continue\n    if any(token in name for token in (\"-sources\", \"-javadoc\", \"-dev\", \"-original\", \"-tests\", \"-test\")):\n        continue\n    if path.stat().st_size < 128:\n        continue\n    preferred = 1 if (\"build\" in parts and \"libs\" in parts) or \"target\" in parts else 0\n    items.append((preferred, path.stat().st_size, path))\nif not items:\n    raise SystemExit(\"The build finished but no distributable JAR was found in build/libs or target.\")\nitems.sort(key=lambda x: (x[0], x[1]), reverse=True)\nselected = items[0][2]\nif selected.stat().st_size > 100 * 1024 * 1024:\n    raise SystemExit(\"The generated JAR exceeds the 100 MB artifact limit.\")\nshutil.copyfile(selected, \"/vercel/sandbox/result.jar\")\nprint(json.dumps({\"ok\": True, \"name\": selected.name, \"bytes\": selected.stat().st_size}))\n";
 
 
-const FABRIC_LOOM_REPOSITORY_FIX_SCRIPT = "import re, sys\nfrom pathlib import Path\n\nroot = Path(sys.argv[1]).resolve()\nsettings = next((p for p in (root / 'settings.gradle', root / 'settings.gradle.kts') if p.is_file()), None)\nbuild = next((p for p in (root / 'build.gradle', root / 'build.gradle.kts') if p.is_file()), None)\nif not settings or not build:\n    print('No settings.gradle/build.gradle pair found; no compatibility patch needed.')\n    raise SystemExit(0)\n\nsettings_text = settings.read_text(encoding='utf-8', errors='replace')\nbuild_text = build.read_text(encoding='utf-8', errors='replace')\nif not re.search(r'net\\\\.fabricmc\\\\.fabric-loom|fabric-loom', build_text, re.I):\n    print('Fabric Loom plugin not detected; no repository compatibility patch needed.')\n    raise SystemExit(0)\n\ndef find_block(source, marker):\n    match = re.search(marker + r'\\\\s*\\\\{', source, re.I)\n    if not match:\n        return None\n    start = source.find('{', match.start())\n    depth, quote, escaped = 0, None, False\n    for i in range(start, len(source)):\n        ch = source[i]\n        if quote:\n            if escaped: escaped = False\n            elif ch == '\\\\\\\\': escaped = True\n            elif ch == quote: quote = None\n            continue\n        if ch in ('\\\\\"', \"'\"): quote = ch\n        elif ch == '{': depth += 1\n        elif ch == '}':\n            depth -= 1\n            if depth == 0: return source[start + 1:i]\n    return None\n\ndrm = find_block(settings_text, r'\\\\bdependencyResolutionManagement')\nrepo_body = find_block(drm, r'\\\\brepositories') if drm is not None else None\nrepo_entries = []\nif repo_body is not None:\n    for match in re.finditer(r'\\\\bmaven\\\\s*\\\\{[^}]*?\\\\burl\\\\s*=\\\\s*(?:uri\\\\s*\\\\()?\\\\s*[\\\\\\'\"]([^\\\\\\'\"]+)[\\\\\\'\"]', repo_body, re.I | re.S):\n        url = match.group(1)\n        if url not in [item[1] for item in repo_entries]: repo_entries.append(('maven', url))\n    for method in ('mavenCentral', 'mavenLocal', 'google'):\n        if re.search(r'\\\\b' + method + r'\\\\s*\\\\(\\\\s*\\\\)', repo_body) and not any(item[0] == method for item in repo_entries):\n            repo_entries.append((method, ''))\nif not repo_entries:\n    repo_entries = [('maven', 'https://maven.fabricmc.net/'), ('mavenCentral', '')]\n\nnew_settings = settings_text\nnew_settings, policy_count = re.subn(r'RepositoriesMode\\\\.(?:FAIL_ON_PROJECT_REPOS|PREFER_SETTINGS)', 'RepositoriesMode.PREFER_PROJECT', new_settings)\nif policy_count == 0 and drm is not None and not re.search(r'RepositoriesMode\\\\.PREFER_PROJECT', drm):\n    match = re.search(r'\\\\bdependencyResolutionManagement\\\\s*\\\\{', new_settings, re.I)\n    if match:\n        pos = match.end()\n        new_settings = new_settings[:pos] + '\\\\n    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)' + new_settings[pos:]\n\nlines = []\nfor kind, value in repo_entries:\n    if kind == 'maven':\n        escaped = value.replace('\\\\\\\\', '\\\\\\\\\\\\\\\\').replace('\\\\\"', '\\\\\\\\\"')\n        lines.append(f'        maven {{ url = uri(\"{escaped}\") }}')\n    else:\n        lines.append(f'        {kind}()')\nrepo_block = '\\\\n// Added by Minecraft Cloud Compiler: retain settings repositories when Fabric Loom adds its local remapped-mod repository.\\\\nallprojects {\\\\n    repositories {\\\\n' + '\\\\n'.join(lines) + '\\\\n    }\\\\n}\\\\n'\nif 'Minecraft Cloud Compiler: retain settings repositories' not in build_text:\n    build_text = build_text.rstrip() + '\\\\n' + repo_block\nsettings.write_text(new_settings, encoding='utf-8')\nbuild.write_text(build_text, encoding='utf-8')\nprint('Applied Fabric Loom repository-policy compatibility fix.')\nprint('Changed settings repository mode to PREFER_PROJECT so Loom can register LoomLocalRemappedMods.')\nprint('Preserved dependency repositories: ' + ', '.join((kind if kind != 'maven' else url) for kind, url in repo_entries))\n";
+const FABRIC_LOOM_REPOSITORY_FIX_SCRIPT = String.raw`import re, sys
+from pathlib import Path
+
+root = Path(sys.argv[1]).resolve()
+settings = next((p for p in (root / 'settings.gradle', root / 'settings.gradle.kts') if p.is_file()), None)
+build = next((p for p in (root / 'build.gradle', root / 'build.gradle.kts') if p.is_file()), None)
+if not settings or not build:
+    print('No settings.gradle/build.gradle pair found; no compatibility patch needed.')
+    raise SystemExit(0)
+
+settings_text = settings.read_text(encoding='utf-8', errors='replace')
+build_text = build.read_text(encoding='utf-8', errors='replace')
+if not re.search(r'net\.fabricmc\.fabric-loom|fabric-loom', build_text, re.I):
+    print('Fabric Loom plugin not detected; no repository compatibility patch needed.')
+    raise SystemExit(0)
+
+def find_block(source, marker):
+    match = re.search(marker + r'\s*\{', source, re.I)
+    if not match:
+        return None
+    start = source.find('{', match.start())
+    depth, quote, escaped = 0, None, False
+    for i in range(start, len(source)):
+        ch = source[i]
+        if quote:
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == quote:
+                quote = None
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+        elif ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return source[start + 1:i]
+    return None
+
+drm = find_block(settings_text, r'\bdependencyResolutionManagement')
+repo_body = find_block(drm, r'\brepositories') if drm is not None else None
+repo_entries = []
+if repo_body is not None:
+    for match in re.finditer(r'\bmaven\s*\{[^}]*?\burl\s*=\s*(?:uri\s*\()?\s*[\'"]([^\'"]+)[\'"]', repo_body, re.I | re.S):
+        url = match.group(1)
+        if url not in [item[1] for item in repo_entries]:
+            repo_entries.append(('maven', url))
+    for method in ('mavenCentral', 'mavenLocal', 'google'):
+        if re.search(r'\b' + method + r'\s*\(\s*\)', repo_body) and not any(item[0] == method for item in repo_entries):
+            repo_entries.append((method, ''))
+
+if not repo_entries:
+    repo_entries = [('maven', 'https://maven.fabricmc.net/'), ('mavenCentral', '')]
+
+new_settings = settings_text
+new_settings, policy_count = re.subn(
+    r'RepositoriesMode\.(?:FAIL_ON_PROJECT_REPOS|PREFER_SETTINGS)',
+    'RepositoriesMode.PREFER_PROJECT',
+    new_settings,
+)
+if policy_count == 0 and drm is not None and not re.search(r'RepositoriesMode\.PREFER_PROJECT', drm):
+    match = re.search(r'\bdependencyResolutionManagement\s*\{', new_settings, re.I)
+    if match:
+        pos = match.end()
+        new_settings = new_settings[:pos] + '\n    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)' + new_settings[pos:]
+
+lines = []
+for kind, value in repo_entries:
+    if kind == 'maven':
+        escaped = value.replace('\\', '\\\\').replace('"', '\\"')
+        lines.append(f'        maven {{ url = uri("{escaped}") }}')
+    else:
+        lines.append(f'        {kind}()')
+
+repo_block = (
+    '\n// Added by Minecraft Cloud Compiler: retain settings repositories when Fabric Loom adds its local remapped-mod repository.\n'
+    'allprojects {\n    repositories {\n'
+    + '\n'.join(lines)
+    + '\n    }\n}\n'
+)
+if 'Minecraft Cloud Compiler: retain settings repositories' not in build_text:
+    build_text = build_text.rstrip() + '\n' + repo_block
+
+settings.write_text(new_settings, encoding='utf-8')
+build.write_text(build_text, encoding='utf-8')
+print('Applied Fabric Loom repository-policy compatibility fix.')
+print('Changed settings repository mode to PREFER_PROJECT so Loom can register LoomLocalRemappedMods.')
+print('Preserved dependency repositories: ' + ', '.join((kind if kind != 'maven' else url) for kind, url in repo_entries))
+`;
 
 function trimLog(value: string) {
   return value.length > 18_000 ? value.slice(-18_000) : value;
