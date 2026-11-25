@@ -275,7 +275,7 @@ export async function POST(request: Request) {
         logs += "$ ./gradlew --no-daemon --no-scan build -x test\n";
         build = await sandbox.runCommand({
           cmd: "bash",
-          args: ["./gradlew", "--no-daemon", "--no-scan", "build", "-x", "test"],
+          args: ["./gradlew", "--no-daemon", "--no-scan", "--stacktrace", "build", "-x", "test"],
           cwd: inspection.root,
         });
       } else {
@@ -298,7 +298,7 @@ export async function POST(request: Request) {
         logs += "$ Gradle " + gradleVersion + " --no-daemon --no-scan build -x test\n";
         build = await sandbox.runCommand({
           cmd: "/vercel/sandbox/gradle-toolchain/gradle-" + gradleVersion + "/bin/gradle",
-          args: ["--no-daemon", "--no-scan", "build", "-x", "test"],
+          args: ["--no-daemon", "--no-scan", "--stacktrace", "build", "-x", "test"],
           cwd: inspection.root,
         });
       }
