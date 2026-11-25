@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import JSZip from "jszip";
 
 type Report = { platform: string; project: string; minecraft: string; java: string; build: string; evidence: string[]; warnings: string[]; files: string[] };
@@ -88,7 +88,6 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
-  const canBuild = useMemo(() => false, []);
 
   async function onFile(file?: File) {
     if (!file) return;
