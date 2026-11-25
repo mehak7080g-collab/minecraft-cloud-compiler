@@ -17,6 +17,7 @@ const NETWORK_ALLOW = {
     "repo.maven.apache.org": [],
     "repo1.maven.org": [],
     "plugins.gradle.org": [],
+    "plugins-artifacts.gradle.org": [],
     "services.gradle.org": [],
     "downloads.gradle.org": [],
     "github.com": [],
