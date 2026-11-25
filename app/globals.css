@@ -35,3 +35,31 @@ footer{text-align:center;color:#657084;font-size:11px;margin-top:70px}
 .logs{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:12px}
 .logs summary{cursor:pointer;color:#c8d2e0;font-size:12px;font-weight:700}
 .logs pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;color:#aab6c8;font:11px 'DM Mono',monospace;line-height:1.6}
+
+.history{max-width:790px;margin:26px auto 0;border:1px solid var(--line);border-radius:18px;padding:20px;background:#0e131c}
+.history-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.history-head h2{margin:0 0 5px;font-size:18px;letter-spacing:-.03em}
+.history-head .muted{margin:0}
+.history-clear,.history-review-button{border:1px solid #3a4658;background:#151d29;color:#dce6f5;border-radius:9px;padding:9px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.history-clear:hover,.history-review-button:hover{border-color:var(--blue);background:#1b2a3e}
+.history-empty{border:1px dashed #303b4b;border-radius:12px;padding:17px;color:var(--muted);font-size:12px;text-align:center}
+.history-list{display:grid;gap:10px}
+.history-item{border:1px solid var(--line);border-radius:12px;padding:14px;background:#0a0f17}
+.history-success{border-left:3px solid #5bb98a}
+.history-failed{border-left:3px solid #d97575}
+.history-item-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.history-item-copy{min-width:0}
+.history-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.history-title strong{font-size:13px;overflow-wrap:anywhere}
+.history-status{font:10px 'DM Mono',monospace;font-weight:700;letter-spacing:.08em;border-radius:5px;padding:5px 7px}
+.status-success{color:#9be0b8;background:#10261d}
+.status-failed{color:#ffb0b0;background:#30191d}
+.history-item-copy small{display:block;color:var(--muted);font-size:11px;line-height:1.6;margin-top:7px;overflow-wrap:anywhere}
+.history-review{margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+.history-review p{font-size:12px;line-height:1.7;margin:0 0 10px;overflow-wrap:anywhere}
+.history-review-success{color:#9be0b8}
+.history-review-error{color:#ffb0b0}
+.history-review pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#070a10;border:1px solid #252d3a;border-radius:9px;padding:12px;color:#c4cddd;font:11px 'DM Mono',monospace;line-height:1.6}
+.history-download{display:inline-flex;color:#b9d3ff;font-size:12px;font-weight:700;margin-top:8px;text-decoration:none}
+.history-download:hover{text-decoration:underline}
+@media(max-width:650px){.history{padding:14px}.history-item-top{align-items:flex-start}.history-review-button{padding:8px 10px}.history-head{align-items:flex-start}}
