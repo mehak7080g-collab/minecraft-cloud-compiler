@@ -96,10 +96,10 @@ export async function POST(request: Request) {
     });
 
     await sandbox.writeFiles([
-      { path: "input.zip", content: inputBuffer },
-      { path: "inspect.py", content: Buffer.from(INSPECT_SCRIPT) },
-      { path: "package_bedrock.py", content: Buffer.from(BEDROCK_SCRIPT) },
-      { path: "select_jar.py", content: Buffer.from(JAR_SCRIPT) },
+      { path: "/vercel/sandbox/input.zip", content: inputBuffer },
+      { path: "/vercel/sandbox/inspect.py", content: Buffer.from(INSPECT_SCRIPT) },
+      { path: "/vercel/sandbox/package_bedrock.py", content: Buffer.from(BEDROCK_SCRIPT) },
+      { path: "/vercel/sandbox/select_jar.py", content: Buffer.from(JAR_SCRIPT) },
     ]);
 
     const inspectionCommand = await sandbox.runCommand("python3", ["/vercel/sandbox/inspect.py"]);
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     let artifactBuffer: Buffer | null = null;
 
     if (inspection.kind === "bedrock") {
-      await sandbox.writeFiles([{ path: "inspection.json", content: Buffer.from(JSON.stringify(inspection)) }]);
+      await sandbox.writeFiles([{ path: "/vercel/sandbox/inspection.json", content: Buffer.from(JSON.stringify(inspection)) }]);
       const packCommand = await sandbox.runCommand("python3", ["/vercel/sandbox/package_bedrock.py"]);
       const packOut = await packCommand.stdout();
       const packErr = await packCommand.stderr();
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       extension = details.extension;
       artifactName = details.name;
       const outputPath = extension === "mcpack" ? "result.mcpack" : "result.mcaddon";
-      artifactBuffer = await sandbox.readFileToBuffer({ path: outputPath });
+      artifactBuffer = await sandbox.readFileToBuffer({ path: `/vercel/sandbox/${outputPath}` });
     } else if (inspection.kind === "java" && inspection.root && inspection.buildSystem) {
       logs += "$ Install isolated Java build tools\n";
       const install = await sandbox.runCommand({
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
       const details = JSON.parse(selectOut);
       extension = "jar";
       artifactName = details.name;
-      artifactBuffer = await sandbox.readFileToBuffer({ path: "result.jar" });
+      artifactBuffer = await sandbox.readFileToBuffer({ path: "/vercel/sandbox/result.jar" });
     } else {
       return Response.json({ ok: false, message: "This project type is not supported by the current cloud build pipeline." }, { status: 422 });
     }
