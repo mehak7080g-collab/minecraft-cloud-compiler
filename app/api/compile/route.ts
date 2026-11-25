@@ -247,7 +247,7 @@ export async function POST(request: Request) {
       });
       const installOut = await install.stdout();
       const installErr = await install.stderr();
-      logs += trimLog(installOut + installErr) + "\n";
+      logs += trimLog(installOut + installErr).slice(-2500) + "\n";
       if (install.exitCode !== 0) {
         return Response.json({ ok: false, message: "Could not install the Java build toolchain in the isolated worker.", logs: trimLog(logs) }, { status: 503 });
       }
