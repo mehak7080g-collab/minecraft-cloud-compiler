@@ -12,7 +12,9 @@
     "jszip": "^3.10.1",
     "next": "^15.5.6",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "@vercel/blob": "^2.9.0",
+    "@vercel/sandbox": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
