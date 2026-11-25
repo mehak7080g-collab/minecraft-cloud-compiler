@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       logs += "$ Install isolated Java build tools\n";
       const install = await sandbox.runCommand({
         cmd: "bash",
-        args: ["-lc", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jdk-headless maven"],
+        args: ["-lc", "set -e; find /etc/apt -type f \\( -name '*.sources' -o -name '*.list' \\) -exec sed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g; s|http://ports.ubuntu.com|https://ports.ubuntu.com|g' {} +; apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-21-jdk-headless maven"],
         sudo: true,
       });
       const installOut = await install.stdout();
